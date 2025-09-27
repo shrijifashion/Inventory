@@ -106,7 +106,6 @@
   </div>
 
   <script>
-    // Use ZXing's BrowserMultiFormatContinuousReader for continuous scanning
     const codeReader = new ZXing.BrowserMultiFormatContinuousReader();
 
     const videoElem = document.getElementById('video');
@@ -131,7 +130,6 @@
     let trackWithTorch = null;
     let torchOn = false;
 
-    // resize overlay to match video
     function resizeOverlay(){
       overlay.width = videoElem.clientWidth * devicePixelRatio;
       overlay.height = videoElem.clientHeight * devicePixelRatio;
@@ -139,7 +137,6 @@
 
     window.addEventListener('resize', resizeOverlay);
 
-    // populate cameras
     async function listCameras(){
       try{
         const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
@@ -158,13 +155,18 @@
 
     async function startCamera(deviceId){
       stopCamera();
-      try{
-        const previewElem = videoElem;
-        await codeReader.decodeFromVideoDevice(deviceId, previewElem, (result, err) => {
+      try {
+        const constraints = deviceId
+          ? { video: { deviceId: { exact: deviceId } } }
+          : { video: { facingMode: "environment" } }; // Safari-friendly default
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        videoElem.srcObject = stream;
+
+        await codeReader.decodeFromVideoDevice(deviceId || null, videoElem, (result, err) => {
           resizeOverlay();
           overlayCtx.clearRect(0,0,overlay.width,overlay.height);
           if(result){
-            // draw result points
             try{
               const pts = result.resultPoints || [];
               overlayCtx.save();
@@ -179,7 +181,7 @@
                 overlayCtx.stroke();
               }
               overlayCtx.restore();
-            }catch(e){/* ignore drawing errors */}
+            }catch(e){}
 
             if(result.text && result.text !== lastResult){
               lastResult = result.text;
@@ -187,42 +189,29 @@
               countEl.textContent = detectedCount;
               setResult(result.text);
             }
-          } else if (err) {
-            // console.debug(err);
           }
         });
 
-        // remember active track for torch
-        const stream = videoElem.srcObject;
-        if(stream && stream.getVideoTracks && stream.getVideoTracks().length){
-          trackWithTorch = stream.getVideoTracks()[0];
-        }
+        const streamTracks = stream.getVideoTracks();
+        if(streamTracks.length){ trackWithTorch = streamTracks[0]; }
         document.getElementById('placeholder').style.display = 'none';
-      }catch(err){
+      } catch (err) {
         console.error('startCamera error', err);
-        alert('Unable to access camera. Make sure you allowed permission and you are on a secure origin (https).');
+        alert("Camera access failed: " + err.message + "\nCheck browser settings and allow camera.");
       }
     }
 
     function stopCamera(){
-      try{
-        codeReader.reset();
-      }catch(e){}
-      if(videoElem.srcObject){
-        videoElem.srcObject.getTracks().forEach(t => t.stop());
-      }
+      try{ codeReader.reset(); }catch(e){}
+      if(videoElem.srcObject){ videoElem.srcObject.getTracks().forEach(t => t.stop()); }
       document.getElementById('placeholder').style.display = 'flex';
       overlayCtx.clearRect(0,0,overlay.width,overlay.height);
       trackWithTorch = null;
     }
 
-    // Torch handling (if supported)
     async function setTorch(on){
       try{
         if(!trackWithTorch) throw new Error('No active video track');
-        const imageCapture = new ImageCapture(trackWithTorch);
-        const capabilities = await imageCapture.getPhotoCapabilities();
-        // Some devices expose torch via MediaStreamTrack.applyConstraints
         if(trackWithTorch.getCapabilities && trackWithTorch.applyConstraints){
           const caps = trackWithTorch.getCapabilities();
           if(caps.torch){
@@ -231,10 +220,7 @@
             return true;
           }
         }
-        // fallback: try applyConstraints directly
-        await trackWithTorch.applyConstraints({advanced:[{torch:on}]});
-        torchOn = on;
-        return true;
+        return false;
       }catch(err){
         console.warn('Torch failed', err);
         alert('Torch is not supported on this device/browser.');
@@ -242,7 +228,6 @@
       }
     }
 
-    // handle file uploads
     fileInput.addEventListener('change', async (e)=>{
       const f = e.target.files && e.target.files[0];
       if(!f) return;
@@ -250,7 +235,6 @@
       const img = new Image();
       img.onload = async ()=>{
         try{
-          // create canvas and decode using ZXing from image
           const canvas = document.createElement('canvas');
           canvas.width = img.naturalWidth;
           canvas.height = img.naturalHeight;
@@ -267,7 +251,6 @@
               alert('No QR/barcode found in image.');
             }
           }catch(err){
-            // fallback to browser library decodeFromImage
             try{
               const res = await new ZXing.BrowserMultiFormatReader().decodeFromImage(undefined, url);
               setResult(res.text || res);
@@ -276,15 +259,12 @@
               alert('Could not decode the image.');
             }
           }
-        }finally{
-          URL.revokeObjectURL(url);
-        }
+        }finally{ URL.revokeObjectURL(url); }
       };
       img.onerror = ()=>{ URL.revokeObjectURL(url); alert('Could not load the image.'); };
       img.src = url;
     });
 
-    // utility to set result
     function setResult(text){
       resultBox.textContent = text;
       openBtn.href = text;
@@ -298,9 +278,7 @@
 
     openBtn.addEventListener('click', (e)=>{
       const txt = resultBox.textContent || '';
-      // allow the link to open only if it looks like a URL
       if(!/^https?:\/\//i.test(txt)){
-        // if not a URL, don't navigate; instead open a search
         e.preventDefault();
         const q = encodeURIComponent(txt);
         window.open('https://www.google.com/search?q=' + q, '_blank');
@@ -309,7 +287,6 @@
 
     clearBtn.addEventListener('click', ()=>{ resultBox.textContent = '-- no result yet --'; lastResult = null; });
 
-    // device and camera controls
     deviceList.addEventListener('change', ()=>{ activeDeviceId = deviceList.value; });
     startBtn.addEventListener('click', ()=>{ if(!activeDeviceId) activeDeviceId = deviceList.value; startCamera(activeDeviceId); });
     stopBtn.addEventListener('click', ()=>stopCamera());
@@ -317,22 +294,16 @@
     pauseBtn.addEventListener('click', ()=>{ codeReader.pause(); });
     resumeBtn.addEventListener('click', ()=>{ codeReader.resume(); });
 
-    // init on load
     (async function init(){
       await listCameras();
-      // try to auto-select environment camera
       try{
         const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
         const env = devices.find(d=>/back|rear|environment/i.test(d.label));
         if(env) activeDeviceId = env.deviceId, deviceList.value = env.deviceId;
       }catch(e){}
-
-      // try to start camera automatically (best effort)
-      // not starting automatically to avoid permission prompt -- user clicks start
       resizeOverlay();
     })();
 
-    // stop camera when leaving page
     window.addEventListener('pagehide', ()=> stopCamera());
   </script>
 </body>
