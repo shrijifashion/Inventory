@@ -1,165 +1,24 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="utf-8">
-  <title>Shriji Fashion - Himanshu Pandey</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { margin: 0; font-family: Arial, sans-serif; background: #fff8f5; color: #333; }
-    header { background: #c0392b; color: white; padding: 20px; text-align: center; position: sticky; top: 0; z-index: 1000; }
-    header h1 { margin: 0; font-size: 28px; }
-    nav { margin-top: 10px; }
-    nav a { color: white; text-decoration: none; margin: 0 15px; font-weight: bold; }
-    nav a:hover { text-decoration: underline; }
-
-    .container { padding: 20px; max-width: 1200px; margin: auto; }
-    h2 { margin-top: 40px; color: #c0392b; }
-
-    /* Hero Banner */
-    #hero { color: white; text-align: center; padding: 80px 20px; border-radius: 10px; background: url('images/Shop.jpeg') no-repeat center center/cover; }
-    #hero h2 { font-size: 36px; margin: 0; text-shadow: 2px 2px 5px black; }
-    #hero p { font-size: 18px; text-shadow: 1px 1px 3px black; }
-
-    /* Filter + Search */
-    .filter-container { text-align: center; margin: 20px 0; }
-    .filter-buttons button { background: #c0392b; color: white; border: none; padding: 10px 15px; margin: 5px; border-radius: 6px; font-weight: bold; cursor: pointer; }
-    .filter-buttons button:hover { background: #a93226; }
-    .search-bar { margin-top: 15px; }
-    .search-bar input { width: 60%; max-width: 400px; padding: 10px; border-radius: 6px; border: 1px solid #aaa; font-size: 16px; }
-
-    /* Product Grid */
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px; }
-    .product { background: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); overflow: hidden; text-align: center; transition: transform 0.3s; }
-    .product:hover { transform: scale(1.05); }
-    .product img { width: 100%; height: 250px; object-fit: cover; }
-    .product h3 { margin: 10px 0 5px; font-size: 18px; }
-    .product p { margin: 0 0 10px; color: #555; }
-    .buy-btn { display: inline-block; margin: 10px; padding: 10px 15px; background: #c0392b; color: white; border-radius: 6px; text-decoration: none; font-weight: bold; }
-    .buy-btn:hover { background: #a93226; }
-
-    footer { background: #222; color: #ccc; text-align: center; padding: 20px; margin-top: 40px; }
-
-    /* Chat Widget */
-    .chat-widget { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 1000; }
-    .chat-widget a { display: flex; align-items: center; justify-content: center; width: 50px; height: 50px; border-radius: 50%; background: #25d366; color: white; font-size: 24px; text-decoration: none; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
-    .chat-widget a.messenger { background: #0084ff; }
-    .chat-widget a.custom { background: #c0392b; font-size: 18px; }
-  </style>
+  <title>Saree Sales Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <link rel="stylesheet" href="style.css"> <!-- optional -->
 </head>
 <body>
+  <h2>Scan Saree QR Code</h2>
+  <div id="reader" style="width:300px;"></div>
 
-  <!-- Header -->
-  <header>
-    <h1>Shriji Fashion</h1>
-    <nav>
-      <a href="#collections">Collections</a>
-      <a href="#about">About</a>
-      <a href="#contact">Contact</a>
-    </nav>
-  </header>
+  <form id="saleForm" style="display:none;">
+    <label>ID NUMBER: <input type="text" id="idNumber" readonly></label><br>
+    <label>DATE: <input type="text" id="date" readonly></label><br>
+    <label>Customer Name: <input type="text" id="customerName"></label><br>
+    <label>Customer Phone: <input type="text" id="customerPhone"></label><br>
+    <label>Quantity Sold: <input type="number" id="qty"></label><br>
+    <label>Sold Rate: <input type="number" id="rate"></label><br>
+    <button type="button" onclick="submitSale()">Submit Sale</button>
+  </form>
 
-  <div class="container">
-    <!-- Hero -->
-    <section id="hero">
-      <h2>Welcome to Shriji Fashion</h2>
-      <p>Traditional Handloom • Pure Silks • Designer Sarees</p>
-    </section>
-
-    <!-- Collections -->
-    <section id="collections">
-      <h2>Our Saree Collections</h2>
-      <!-- Filter + Search -->
-      <div class="filter-container">
-        <div class="filter-buttons">
-          <button onclick="filterSelection('all')">All</button>
-          <button onclick="filterSelection('banarasi')">Banarasi</button>
-          <button onclick="filterSelection('cotton')">Cotton</button>
-          <button onclick="filterSelection('bihari')">Bihari</button>
-          <button onclick="filterSelection('designer')">Designer</button>
-        </div>
-        <div class="search-bar">
-          <input type="text" id="searchInput" onkeyup="searchProducts()" placeholder="Search sarees...">
-        </div>
-      </div>
-
-      <!-- Products Grid -->
-      <div class="grid" id="productGrid">
-        <div class="product banarasi">
-          <img src="images/Banarasi.jpeg" alt="Banarasi Saree">
-          <h3>Banarasi Pure Silk</h3>
-          <p>₹12,500</p>
-          <a href="https://wa.me/918200947518?text=I%20want%20to%20order%20Banarasi%20Saree" class="buy-btn">Order on WhatsApp</a>
-        </div>
-        <div class="product cotton">
-          <img src="images/Cotton.jpeg" alt="Cotton Saree">
-          <h3>Handloom Cotton</h3>
-          <p>₹2,200</p>
-          <a href="https://wa.me/918200947518?text=I%20want%20to%20order%20Cotton%20Saree" class="buy-btn">Order on WhatsApp</a>
-        </div>
-        <div class="product bihari">
-          <img src="images/Bihari.jpeg" alt="Bihari Saree">
-          <h3>Bihari Silk Saree</h3>
-          <p>₹7,500</p>
-          <a href="https://wa.me/918200947518?text=I%20want%20to%20order%20Bihari%20Saree" class="buy-btn">Order on WhatsApp</a>
-        </div>
-        <div class="product designer">
-          <img src="images/Shop.jpeg" alt="Designer Saree">
-          <h3>Designer Party Saree</h3>
-          <p>₹9,400</p>
-          <a href="https://wa.me/918200947518?text=I%20want%20to%20order%20Designer%20Saree" class="buy-btn">Order on WhatsApp</a>
-        </div>
-      </div>
-    </section>
-
-    <!-- About -->
-    <section id="about">
-      <h2>About Us</h2>
-      <p>Hello, I am <b>Himanshu Pandey</b>, the owner of <b>Shriji Fashion</b>. We are a family-run boutique dedicated to traditional handloom artistry and elegant modern designs. Every saree is carefully handpicked from skilled weavers across India.</p>
-    </section>
-
-    <!-- Contact -->
-    <section id="contact">
-      <h2>Contact Us</h2>
-      <p><b>Owner:</b> Himanshu Pandey</p>
-      <p><b>Shop:</b> Shriji Fashion</p>
-      <p><b>Address:</b> Village: Rudpay, Post: Shambhuganj, Thana: Shambhuganj, Banka, Bihar, 813211</p>
-      <p><b>WhatsApp:</b> <a href="https://wa.me/918200947518">+91-8200947518</a></p>
-      <p><b>Email:</b> <a href="mailto:shriji.fashion.bihar@gmail.com">shriji.fashion.bihar@gmail.com</a></p>
-    </section>
-  </div>
-
-  <!-- Footer -->
-  <footer>
-    <p>© 2025 Shriji Fashion — All Rights Reserved</p>
-  </footer>
-
-  <!-- Floating Chat Widget -->
-  <div class="chat-widget">
-    <a href="https://wa.me/918200947518" target="_blank" title="Chat on WhatsApp">💬</a>
-    <a href="https://m.me/yourpageid" target="_blank" class="messenger" title="Chat on Messenger">📩</a>
-    <a href="mailto:shriji.fashion.bihar@gmail.com" class="custom" title="Send us a Message">✉️</a>
-  </div>
-
-  <!-- JavaScript for Filter + Search -->
-  <script>
-    function filterSelection(category) {
-      let products = document.getElementsByClassName("product");
-      if (category === "all") category = "";
-      for (let i = 0; i < products.length; i++) {
-        products[i].style.display = products[i].className.indexOf(category) > -1 ? "block" : "none";
-      }
-    }
-    function searchProducts() {
-      let input = document.getElementById("searchInput").value.toLowerCase();
-      let products = document.getElementsByClassName("product");
-      for (let i = 0; i < products.length; i++) {
-        let text = products[i].innerText.toLowerCase();
-        products[i].style.display = text.indexOf(input) > -1 ? "block" : "none";
-      }
-    }
-    // Show all by default
-    filterSelection("all");
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
-
