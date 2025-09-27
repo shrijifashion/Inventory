@@ -1,24 +1,339 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-  <title>Saree Sales Scanner</title>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-  <link rel="stylesheet" href="style.css"> <!-- optional -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>QR / Barcode Scanner</title>
+  <meta name="description" content="Simple web QR & barcode scanner. Works with camera and file upload. Put this file on GitHub and host with GitHub Pages." />
+
+  <!-- ZXing library (Browser) -->
+  <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#9aa4b2}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{background:linear-gradient(180deg,#071026 0%,#081021 100%);color:#e6eef6;display:flex;align-items:center;justify-content:center;padding:24px}
+    .app{width:100%;max-width:920px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:12px;padding:18px;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    h1{margin:0 0 8px;font-size:20px}
+    p.lead{margin:0 0 18px;color:var(--muted)}
+
+    .grid{display:grid;grid-template-columns:1fr 360px;gap:16px}
+    .card{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px}
+
+    .viewer{position:relative;border-radius:8px;overflow:hidden;background:#000;height:420px;display:flex;align-items:center;justify-content:center}
+    video{width:100%;height:100%;object-fit:cover}
+    canvas.overlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    select,input[type=file]{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:8px;border-radius:8px}
+    button{background:var(--accent);border:0;padding:8px 12px;border-radius:8px;color:#042;cursor:pointer;font-weight:600}
+    .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit}
+
+    .result{word-break:break-all;padding:12px;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent)}
+    .muted{color:var(--muted);font-size:13px}
+
+    footer{font-size:13px;color:var(--muted);margin-top:12px;text-align:right}
+
+    @media(max-width:880px){.grid{grid-template-columns:1fr;}.viewer{height:320px}}
+  </style>
 </head>
 <body>
-  <h2>Scan Saree QR Code</h2>
-  <div id="reader" style="width:300px;"></div>
+  <div class="app">
+    <h1>QR & Barcode Scanner</h1>
+    <p class="lead">Scan using your device camera (best in modern browsers) or upload an image. Works offline once loaded from your host.</p>
 
-  <form id="saleForm" style="display:none;">
-    <label>ID NUMBER: <input type="text" id="idNumber" readonly></label><br>
-    <label>DATE: <input type="text" id="date" readonly></label><br>
-    <label>Customer Name: <input type="text" id="customerName"></label><br>
-    <label>Customer Phone: <input type="text" id="customerPhone"></label><br>
-    <label>Quantity Sold: <input type="number" id="qty"></label><br>
-    <label>Sold Rate: <input type="number" id="rate"></label><br>
-    <button type="button" onclick="submitSale()">Submit Sale</button>
-  </form>
+    <div class="grid">
+      <div class="card">
+        <div class="viewer" id="viewer">
+          <video id="video" autoplay muted playsinline></video>
+          <canvas id="overlay" class="overlay"></canvas>
+          <div id="placeholder" style="position:absolute;color:#cbd5e1;opacity:.7;text-align:center;">
+            <div style="transform:translateY(-40%);">
+              <svg width="68" height="68" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7V5a2 2 0 0 1 2-2h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 17v2a2 2 0 0 1-2 2h-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 3h10v18H7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div style="margin-top:8px">No camera active</div>
+            </div>
+          </div>
+        </div>
 
-  <script src="script.js"></script>
+        <div class="controls" style="margin-top:12px;">
+          <select id="deviceList"></select>
+          <button id="startBtn">Start camera</button>
+          <button id="stopBtn" class="btn-ghost">Stop</button>
+          <button id="toggleTorch" class="btn-ghost">Toggle torch</button>
+          <label class="btn-ghost" style="display:inline-block;padding:6px 10px;cursor:pointer">
+            Upload
+            <input id="fileInput" type="file" accept="image/*" style="display:none" />
+          </label>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+          <button id="pauseBtn" class="btn-ghost">Pause</button>
+          <button id="resumeBtn" class="btn-ghost">Resume</button>
+          <div style="flex:1;text-align:right" class="muted">Detected: <span id="count">0</span></div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="result" id="result">-- no result yet --</div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button id="copyBtn" class="btn-ghost">Copy</button>
+            <a id="openBtn" class="btn-ghost" href="#" target="_blank">Open</a>
+            <button id="clearBtn" class="btn-ghost">Clear</button>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">How to use</h3>
+        <ol style="padding-left:18px;color:var(--muted)">
+          <li>Allow camera permission when prompted.</li>
+          <li>Choose a camera from the dropdown (if you have multiple).</li>
+          <li>Point device to a QR / barcode. Result appears instantly.</li>
+          <li>Or click Upload and choose an image file.</li>
+        </ol>
+
+        <h4 style="margin-bottom:6px">Features</h4>
+        <ul style="padding-left:18px;color:var(--muted)">
+          <li>Camera scan with camera selection.</li>
+          <li>Image upload fallback.</li>
+          <li>Toggle torch (if device supports it).</li>
+          <li>Pause / resume scanning, copy/open results.</li>
+        </ul>
+
+        <footer>Made for hosting on GitHub Pages — drop this file as <code>index.html</code>.</footer>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Use ZXing's BrowserMultiFormatContinuousReader for continuous scanning
+    const codeReader = new ZXing.BrowserMultiFormatContinuousReader();
+
+    const videoElem = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const overlayCtx = overlay.getContext('2d');
+    const deviceList = document.getElementById('deviceList');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const toggleTorch = document.getElementById('toggleTorch');
+    const fileInput = document.getElementById('fileInput');
+    const resultBox = document.getElementById('result');
+    const countEl = document.getElementById('count');
+    const copyBtn = document.getElementById('copyBtn');
+    const openBtn = document.getElementById('openBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
+
+    let activeDeviceId = null;
+    let detectedCount = 0;
+    let lastResult = null;
+    let trackWithTorch = null;
+    let torchOn = false;
+
+    // resize overlay to match video
+    function resizeOverlay(){
+      overlay.width = videoElem.clientWidth * devicePixelRatio;
+      overlay.height = videoElem.clientHeight * devicePixelRatio;
+    }
+
+    window.addEventListener('resize', resizeOverlay);
+
+    // populate cameras
+    async function listCameras(){
+      try{
+        const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+        deviceList.innerHTML = '';
+        devices.forEach(d => {
+          const o = document.createElement('option');
+          o.value = d.deviceId;
+          o.textContent = d.label || `Camera ${deviceList.length+1}`;
+          deviceList.appendChild(o);
+        });
+        if(devices.length) { deviceList.value = devices[0].deviceId; activeDeviceId = deviceList.value; }
+      }catch(e){
+        console.warn('listCameras failed', e);
+      }
+    }
+
+    async function startCamera(deviceId){
+      stopCamera();
+      try{
+        const previewElem = videoElem;
+        await codeReader.decodeFromVideoDevice(deviceId, previewElem, (result, err) => {
+          resizeOverlay();
+          overlayCtx.clearRect(0,0,overlay.width,overlay.height);
+          if(result){
+            // draw result points
+            try{
+              const pts = result.resultPoints || [];
+              overlayCtx.save();
+              overlayCtx.scale(devicePixelRatio, devicePixelRatio);
+              overlayCtx.strokeStyle = '#06b6d4';
+              overlayCtx.lineWidth = 3;
+              overlayCtx.beginPath();
+              if(pts.length>0){
+                overlayCtx.moveTo(pts[0].x, pts[0].y);
+                for(let i=1;i<pts.length;i++) overlayCtx.lineTo(pts[i].x, pts[i].y);
+                overlayCtx.closePath();
+                overlayCtx.stroke();
+              }
+              overlayCtx.restore();
+            }catch(e){/* ignore drawing errors */}
+
+            if(result.text && result.text !== lastResult){
+              lastResult = result.text;
+              detectedCount += 1;
+              countEl.textContent = detectedCount;
+              setResult(result.text);
+            }
+          } else if (err) {
+            // console.debug(err);
+          }
+        });
+
+        // remember active track for torch
+        const stream = videoElem.srcObject;
+        if(stream && stream.getVideoTracks && stream.getVideoTracks().length){
+          trackWithTorch = stream.getVideoTracks()[0];
+        }
+        document.getElementById('placeholder').style.display = 'none';
+      }catch(err){
+        console.error('startCamera error', err);
+        alert('Unable to access camera. Make sure you allowed permission and you are on a secure origin (https).');
+      }
+    }
+
+    function stopCamera(){
+      try{
+        codeReader.reset();
+      }catch(e){}
+      if(videoElem.srcObject){
+        videoElem.srcObject.getTracks().forEach(t => t.stop());
+      }
+      document.getElementById('placeholder').style.display = 'flex';
+      overlayCtx.clearRect(0,0,overlay.width,overlay.height);
+      trackWithTorch = null;
+    }
+
+    // Torch handling (if supported)
+    async function setTorch(on){
+      try{
+        if(!trackWithTorch) throw new Error('No active video track');
+        const imageCapture = new ImageCapture(trackWithTorch);
+        const capabilities = await imageCapture.getPhotoCapabilities();
+        // Some devices expose torch via MediaStreamTrack.applyConstraints
+        if(trackWithTorch.getCapabilities && trackWithTorch.applyConstraints){
+          const caps = trackWithTorch.getCapabilities();
+          if(caps.torch){
+            await trackWithTorch.applyConstraints({advanced:[{torch:on}]});
+            torchOn = on;
+            return true;
+          }
+        }
+        // fallback: try applyConstraints directly
+        await trackWithTorch.applyConstraints({advanced:[{torch:on}]});
+        torchOn = on;
+        return true;
+      }catch(err){
+        console.warn('Torch failed', err);
+        alert('Torch is not supported on this device/browser.');
+        return false;
+      }
+    }
+
+    // handle file uploads
+    fileInput.addEventListener('change', async (e)=>{
+      const f = e.target.files && e.target.files[0];
+      if(!f) return;
+      const url = URL.createObjectURL(f);
+      const img = new Image();
+      img.onload = async ()=>{
+        try{
+          // create canvas and decode using ZXing from image
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img,0,0);
+          try{
+            const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+            const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+            const reader = new ZXing.MultiFormatReader();
+            const result = reader.decode(binaryBitmap);
+            if(result && result.getText){
+              setResult(result.getText());
+            } else {
+              alert('No QR/barcode found in image.');
+            }
+          }catch(err){
+            // fallback to browser library decodeFromImage
+            try{
+              const res = await new ZXing.BrowserMultiFormatReader().decodeFromImage(undefined, url);
+              setResult(res.text || res);
+            }catch(err2){
+              console.error(err2);
+              alert('Could not decode the image.');
+            }
+          }
+        }finally{
+          URL.revokeObjectURL(url);
+        }
+      };
+      img.onerror = ()=>{ URL.revokeObjectURL(url); alert('Could not load the image.'); };
+      img.src = url;
+    });
+
+    // utility to set result
+    function setResult(text){
+      resultBox.textContent = text;
+      openBtn.href = text;
+      lastResult = text;
+    }
+
+    copyBtn.addEventListener('click', async ()=>{
+      const txt = resultBox.textContent || '';
+      try{ await navigator.clipboard.writeText(txt); alert('Copied to clipboard'); }catch(e){ alert('Copy failed'); }
+    });
+
+    openBtn.addEventListener('click', (e)=>{
+      const txt = resultBox.textContent || '';
+      // allow the link to open only if it looks like a URL
+      if(!/^https?:\/\//i.test(txt)){
+        // if not a URL, don't navigate; instead open a search
+        e.preventDefault();
+        const q = encodeURIComponent(txt);
+        window.open('https://www.google.com/search?q=' + q, '_blank');
+      }
+    });
+
+    clearBtn.addEventListener('click', ()=>{ resultBox.textContent = '-- no result yet --'; lastResult = null; });
+
+    // device and camera controls
+    deviceList.addEventListener('change', ()=>{ activeDeviceId = deviceList.value; });
+    startBtn.addEventListener('click', ()=>{ if(!activeDeviceId) activeDeviceId = deviceList.value; startCamera(activeDeviceId); });
+    stopBtn.addEventListener('click', ()=>stopCamera());
+    toggleTorch.addEventListener('click', ()=>setTorch(!torchOn));
+    pauseBtn.addEventListener('click', ()=>{ codeReader.pause(); });
+    resumeBtn.addEventListener('click', ()=>{ codeReader.resume(); });
+
+    // init on load
+    (async function init(){
+      await listCameras();
+      // try to auto-select environment camera
+      try{
+        const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+        const env = devices.find(d=>/back|rear|environment/i.test(d.label));
+        if(env) activeDeviceId = env.deviceId, deviceList.value = env.deviceId;
+      }catch(e){}
+
+      // try to start camera automatically (best effort)
+      // not starting automatically to avoid permission prompt -- user clicks start
+      resizeOverlay();
+    })();
+
+    // stop camera when leaving page
+    window.addEventListener('pagehide', ()=> stopCamera());
+  </script>
 </body>
 </html>
